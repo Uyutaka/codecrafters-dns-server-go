@@ -1,0 +1,45 @@
+package util 
+
+import "errors"
+
+const MaxOneBitValue OneBit = 0b1
+
+type OneBit byte
+
+func NewOneBit(value byte) (OneBit, error) {
+
+	if value > byte(MaxOneBitValue) {
+		return 0, errors.New("value exceeds 1 bit limit")
+	}
+	return OneBit(value), nil
+}
+
+const MaxThreeBitValue ThreeBit = 0b111
+
+type ThreeBit byte
+
+func NewThreeBit(value byte) (ThreeBit, error) {
+
+	if value > byte(MaxThreeBitValue) {
+		return 0, errors.New("value exceeds 3 bit limit")
+	}
+	return ThreeBit(value), nil
+}
+
+const MaxFourBitValue FourBit = 0b1111
+
+type FourBit byte
+
+func NewFourBit(value byte) (FourBit, error) {
+
+	if value > byte(MaxFourBitValue) {
+		return 0, errors.New("value exceeds 4 bit limit")
+	}
+	return FourBit(value), nil
+}
+
+type SixteenBit uint16
+
+func NewSixteenBit(value uint16) (SixteenBit, error) {
+	return SixteenBit(value), nil
+}
