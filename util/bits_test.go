@@ -1,6 +1,7 @@
 package util
 
 import (
+	"bytes"
 	"testing"
 )
 
@@ -133,19 +134,38 @@ func TestNewFourBit(t *testing.T) {
 func TestNewSixteenBit(t *testing.T) {
 	t.Run("NewSixteenBit", func(t *testing.T) {
 		tests := []struct {
-			input uint16
+			input []byte
 			want  SixteenBit
 		}{
-			{0xFFFF, 0xFFFF},
-			{0xFFFE, 0xFFFE},
+			{[]byte{255, 255}, []byte{255, 255}},
+			{[]byte{3, 4}, []byte{3, 4}},
 		}
 		for _, tt := range tests {
 
 			got, err := NewSixteenBit(tt.input)
-			if got != tt.want {
+			if !bytes.Equal(got, tt.want) {
 				t.Errorf("NewSixteenBit(%08b) = %08b; want %08b", tt.input, got, tt.want)
 			}
 			if err != nil {
+				t.Errorf("NewSixteenBit(%08b) = %08b; want nil", tt.input, got)
+			}
+		}
+	})
+
+	t.Run("NewSixteenBit_Failure", func(t *testing.T) {
+		tests := []struct {
+			input []byte
+			want  SixteenBit
+		}{
+			{[]byte{255, 255, 1}, []byte{0}},
+		}
+		for _, tt := range tests {
+
+			got, err := NewSixteenBit(tt.input)
+			if !bytes.Equal(got, tt.want) {
+				t.Errorf("NewSixteenBit(%08b) = %08b; want %08b", tt.input, got, tt.want)
+			}
+			if err == nil {
 				t.Errorf("NewSixteenBit(%08b) = %08b; want nil", tt.input, got)
 			}
 		}

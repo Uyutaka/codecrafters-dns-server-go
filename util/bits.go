@@ -38,9 +38,12 @@ func NewFourBit(value byte) (FourBit, error) {
 	return FourBit(value), nil
 }
 
-type SixteenBit uint16
+type SixteenBit []byte
 
-func NewSixteenBit(value uint16) (SixteenBit, error) {
+func NewSixteenBit(value []byte) (SixteenBit, error) {
+	if len(value) > 2 {
+		return SixteenBit([]byte{0}), errors.New("value exceeds 16 bit limit")
+	}
 	return SixteenBit(value), nil
 }
 
