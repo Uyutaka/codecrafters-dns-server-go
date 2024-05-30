@@ -1,4 +1,4 @@
-package util 
+package util
 
 import "errors"
 
@@ -42,4 +42,20 @@ type SixteenBit uint16
 
 func NewSixteenBit(value uint16) (SixteenBit, error) {
 	return SixteenBit(value), nil
+}
+
+type Header struct {
+	id      SixteenBit
+	qr      OneBit
+	opcode  FourBit
+	aa      OneBit
+	tc      OneBit
+	rd      OneBit
+	ra      OneBit
+	z       ThreeBit
+	rcode   FourBit
+	qdcount SixteenBit
+	ancount SixteenBit
+	nscount SixteenBit
+	arcount SixteenBit
 }
