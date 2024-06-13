@@ -1,7 +1,7 @@
 package util
 
 import (
-	"bytes"
+	"reflect"
 	"testing"
 )
 
@@ -134,16 +134,18 @@ func TestNewFourBit(t *testing.T) {
 func TestNewSixteenBit(t *testing.T) {
 	t.Run("NewSixteenBit", func(t *testing.T) {
 		tests := []struct {
-			input []byte
+			input [2]byte
 			want  SixteenBit
 		}{
-			{[]byte{255, 255}, []byte{255, 255}},
-			{[]byte{3, 4}, []byte{3, 4}},
+			{[2]byte{255, 255}, [2]byte{255, 255}},
+			{[2]byte{3, 4}, [2]byte{3, 4}},
+			{[2]byte{0, 0}, [2]byte{0, 0}},
+			{[2]byte{0}, [2]byte{0, 0}},
 		}
 		for _, tt := range tests {
 
 			got, err := NewSixteenBit(tt.input)
-			if !bytes.Equal(got, tt.want) {
+			if got != tt.want {
 				t.Errorf("NewSixteenBit(%08b) = %08b; want %08b", tt.input, got, tt.want)
 			}
 			if err != nil {
@@ -151,22 +153,48 @@ func TestNewSixteenBit(t *testing.T) {
 			}
 		}
 	})
+}
 
-	t.Run("NewSixteenBit_Failure", func(t *testing.T) {
+func TestNewHeader(t *testing.T) {
+	t.Run("NewHeader", func(t *testing.T) {
 		tests := []struct {
-			input []byte
-			want  SixteenBit
+			input [12]byte
+			want  Header
 		}{
-			{[]byte{255, 255, 1}, []byte{0}},
+			{[12]byte{255, 25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, Header{id: [2]byte{255, 25}}},
+			{[12]byte{0, 0, 0b11111101, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+				Header{qr: 1, opcode: 0b1111, aa: 1, tc: 0, rd: 1}},
 		}
 		for _, tt := range tests {
 
-			got, err := NewSixteenBit(tt.input)
-			if !bytes.Equal(got, tt.want) {
-				t.Errorf("NewSixteenBit(%08b) = %08b; want %08b", tt.input, got, tt.want)
+			got, err := NewHeader(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewHeader(%08b) = %08b; want %08b", tt.input, got, tt.want)
 			}
-			if err == nil {
-				t.Errorf("NewSixteenBit(%08b) = %08b; want nil", tt.input, got)
+			if err != nil {
+				t.Errorf("NewHeader(%08b) = %08b; want nil", tt.input, got)
+			}
+		}
+	})
+}
+
+func TestToBytes(t *testing.T) {
+	t.Run("ToBytes", func(t *testing.T) {
+		tests := []struct {
+			input Header
+			want  [12]byte
+		}{
+			{Header{id: [2]byte{255, 25}}, [12]byte{255, 25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+			{
+				Header{qr: 1, opcode: 0b1111, aa: 1, tc: 0, rd: 1},
+				[12]byte{0, 0, 0b11111101, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			},
+		}
+		for _, tt := range tests {
+
+			got := ToBytes(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewHeader(%08b) = %08b; want %08b", tt.input, got, tt.want)
 			}
 		}
 	})
