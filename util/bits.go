@@ -195,3 +195,9 @@ func ToBytes(header Header) [12]byte {
 
 	return result
 }
+
+func Reply(header Header) Header {
+	newHeader := header
+	newHeader.qr = 1
+	return newHeader
+}
