@@ -199,3 +199,22 @@ func TestToBytes(t *testing.T) {
 		}
 	})
 }
+
+func TestDomainToByte(t *testing.T) {
+	t.Run("DomainToByte", func(t *testing.T) {
+		tests := []struct {
+			input string
+			want  []byte
+		}{
+			{"google.com", []byte{0x06, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x03, 0x63, 0x6f, 0x6d, 0x00}},                                    // \x06google\x03com\x00
+			{"codecrafters.io", []byte{0x0c, 0x63, 0x6f, 0x64, 0x65, 0x63, 0x72, 0x61, 0x66, 0x74, 0x65, 0x72, 0x73, 0x02, 0x69, 0x6f, 0x00}}, // \x0ccodecrafters\x02io\x00
+		}
+		for _, tt := range tests {
+			got := DomainToByte(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+
+				t.Errorf("DomainToByte(%s) = %08b; \nwant %08b\n got: %d\n want: %d", tt.input, got, tt.want, len(got), len(tt.want))
+			}
+		}
+	})
+}

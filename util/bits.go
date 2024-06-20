@@ -2,6 +2,7 @@ package util
 
 import (
 	"errors"
+	"strings"
 )
 
 const MaxOneBitValue OneBit = 0b1
@@ -200,4 +201,29 @@ func Reply(header Header) Header {
 	newHeader := header
 	newHeader.qr = 1
 	return newHeader
+}
+
+type Domain struct {
+	domain string
+}
+
+// TODO implement NewDomain()
+func NewDomain(domain string) (Domain, error) {
+	return Domain{domain: domain}, nil
+}
+
+func DomainToByte(domain string) []byte {
+	parts := strings.Split(domain, ".")
+	hexBytes := make([]byte, len(domain)+2)
+
+	index := 0
+	for i, part := range parts {
+		hexBytes[index] = byte(len(parts[i]))
+		index++
+		for _, char := range part {
+			hexBytes[index] = byte(char)
+			index++
+		}
+	}
+	return hexBytes
 }
