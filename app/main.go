@@ -36,15 +36,28 @@ func main() {
 		first12Bytes := buf[:12]
 		var first12BytesArray [12]byte
 		copy(first12BytesArray[:], first12Bytes)
+
+		// Header Section
 		header, err := util.NewHeader(first12BytesArray)
 		if err != nil {
 			fmt.Println(err)
 		}
-
-		answerHeader := util.Reply(header)
+		headerWithId, err := util.NewHeaderWithIdAndQdcount(header, 1234, 1)
+		if err != nil {
+			fmt.Println(err)
+		}
+		answerHeader := util.Reply(headerWithId)
 		answerBytes := util.ToBytes(answerHeader)
 
 		response := answerBytes[:]
+
+		// Question Section
+		question, err := util.NewQuestion("codecrafters.io", util.A, util.IN)
+		if err != nil {
+			fmt.Println(err)
+		}
+		questionByte := util.QuestionToBytes(question)
+		response = append(response, questionByte...)
 
 		_, err = udpConn.WriteToUDP(response, source)
 		if err != nil {

@@ -218,3 +218,100 @@ func TestDomainToByte(t *testing.T) {
 		}
 	})
 }
+
+func TestNewRecordType(t *testing.T) {
+	t.Run("NewRecordType", func(t *testing.T) {
+		tests := []struct {
+			input uint8
+			want  [2]byte
+		}{
+			{
+				A,
+				[2]byte{0x00, 0x01}, // 1
+			},
+			{
+				TXT,
+				[2]byte{0x00, 0x10}, // 16
+			},
+		}
+		for _, tt := range tests {
+			got, _ := NewRecordType(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewRecordType(%d) = %08b; \nwant %08b", tt.input, got, tt.want)
+			}
+		}
+	})
+	t.Run("NewRecordType_Failure", func(t *testing.T) {
+		tests := []struct {
+			input uint8
+			want  [2]byte
+		}{
+			{
+				MAX_RECORD_TYPE + 1,
+				[2]byte{0x00, 0x00},
+			},
+			{
+				100,
+				[2]byte{0x00, 0x00},
+			},
+		}
+		for _, tt := range tests {
+
+			got, err := NewRecordType(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewRecordType(%d) = %08b; want %08b", tt.input, got, tt.want)
+			}
+			if err == nil {
+				t.Errorf("NewRecordType(%d) = %08b; do not want nil", tt.input, got)
+			}
+		}
+	})
+}
+func TestNewClass(t *testing.T) {
+	t.Run("NewClass", func(t *testing.T) {
+		tests := []struct {
+			input uint8
+			want  [2]byte
+		}{
+			{
+				IN,
+				[2]byte{0x00, 0x01}, // 1
+			},
+			{
+				HS,
+				[2]byte{0x00, 0x04}, // 4
+			},
+		}
+		for _, tt := range tests {
+			got, _ := NewClass(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewClass(%d) = %08b; \nwant %08b", tt.input, got, tt.want)
+			}
+		}
+	})
+	t.Run("NewClass_Failure", func(t *testing.T) {
+		tests := []struct {
+			input uint8
+			want  [2]byte
+		}{
+			{
+				MAX_CLASS + 1,
+				[2]byte{0x00, 0x00},
+			},
+			{
+				100,
+				[2]byte{0x00, 0x00},
+			},
+		}
+		for _, tt := range tests {
+
+			got, err := NewClass(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewClass(%d) = %08b; want %08b", tt.input, got, tt.want)
+			}
+			if err == nil {
+				t.Errorf("NewClass(%d) = %08b; do not want nil", tt.input, got)
+			}
+		}
+	})
+}

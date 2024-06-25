@@ -44,9 +44,9 @@ func NewFourBit(value byte) (FourBit, error) {
 type SixteenBit [2]byte
 
 func NewSixteenBit(value [2]byte) (SixteenBit, error) {
-	// if len(value) > 2 {
-	// return SixteenBit([]byte{0}), errors.New("value exceeds 16 bit limit")
-	// }
+	// TODO
+	// - change parameter to uint
+	//    - check the max int value
 	return SixteenBit(value), nil
 }
 
@@ -165,6 +165,22 @@ func NewHeader(value [12]byte) (Header, error) {
 	return header, nil
 }
 
+func NewHeaderWithIdAndQdcount(header Header, id uint, qdcount uint) (Header, error) {
+	idBytes, err := NewSixteenBit([2]byte{byte(id >> 8), byte(id & 0xff)})
+	if err != nil {
+		return Header{}, err
+	}
+
+	qdcountBytes, err := NewSixteenBit([2]byte{byte(qdcount >> 8), byte(qdcount & 0xff)})
+	if err != nil {
+		return Header{}, err
+	}
+
+	header.id = idBytes
+	header.qdcount = qdcountBytes
+	return header, nil
+}
+
 func ToBytes(header Header) [12]byte {
 	var result [12]byte
 
@@ -203,15 +219,6 @@ func Reply(header Header) Header {
 	return newHeader
 }
 
-type Domain struct {
-	domain string
-}
-
-// TODO implement NewDomain()
-func NewDomain(domain string) (Domain, error) {
-	return Domain{domain: domain}, nil
-}
-
 func DomainToByte(domain string) []byte {
 	parts := strings.Split(domain, ".")
 	hexBytes := make([]byte, len(domain)+2)
@@ -226,4 +233,86 @@ func DomainToByte(domain string) []byte {
 		}
 	}
 	return hexBytes
+}
+
+const (
+	_ uint8 = iota
+	A
+	NS
+	MD
+	MF
+	CNAME
+	SOA
+	MB
+	MG
+	MR
+	NULL
+	WKS
+	PTR
+	HINFO
+	MINFO
+	MX
+	TXT
+	MAX_RECORD_TYPE uint8 = 16
+)
+const (
+	_ uint8 = iota
+	IN
+	CS
+	CH
+	HS
+	MAX_CLASS uint8 = 4
+)
+
+func NewRecordType(rType uint8) ([2]byte, error) {
+
+	if MAX_RECORD_TYPE < rType {
+		return [2]byte{}, errors.New("value exceeds request type limit")
+	}
+	var byteArray [2]byte
+	byteArray[1] = rType
+
+	return byteArray, nil
+}
+
+func NewClass(class uint8) ([2]byte, error) {
+	if MAX_CLASS < class {
+		return [2]byte{}, errors.New("value exceeds class limit")
+	}
+	var byteArray [2]byte
+	byteArray[1] = class
+	return byteArray, nil
+}
+
+type Question struct {
+	domain     []byte
+	recordType [2]byte
+	class      [2]byte
+}
+
+func NewQuestion(domain string, recordType uint8, class uint8) (Question, error) {
+	domainByte := DomainToByte(domain)
+	recordTypeByte, err := NewRecordType(recordType)
+	if err != nil {
+		return Question{}, err
+	}
+	classByte, err := NewClass(class)
+	if err != nil {
+		return Question{}, err
+	}
+	return Question{domain: domainByte, recordType: recordTypeByte, class: classByte}, nil
+}
+
+func QuestionToBytes(question Question) []byte {
+
+	var questionBytes []byte
+
+	typeSlice := question.recordType[:]
+	classSlice := question.class[:]
+
+	questionBytes = append(questionBytes, question.domain...)
+	questionBytes = append(questionBytes, typeSlice...)
+	questionBytes = append(questionBytes, classSlice...)
+	
+	return questionBytes
 }
