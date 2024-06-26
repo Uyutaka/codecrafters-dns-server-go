@@ -165,11 +165,7 @@ func NewHeader(value [12]byte) (Header, error) {
 	return header, nil
 }
 
-func NewHeaderWithIdAndQdcountAndAncount(header Header, id uint, qdcount uint16, ancount uint16) (Header, error) {
-	idBytes, err := NewSixteenBit([2]byte{byte(id >> 8), byte(id & 0xff)})
-	if err != nil {
-		return Header{}, err
-	}
+func NewHeaderWithQdcountAndAncount(header Header, qdcount uint16, ancount uint16) (Header, error) {
 
 	qdcountBytes, err := NewSixteenBit([2]byte{byte(qdcount >> 8), byte(qdcount & 0xff)})
 	if err != nil {
@@ -181,7 +177,6 @@ func NewHeaderWithIdAndQdcountAndAncount(header Header, id uint, qdcount uint16,
 		return Header{}, err
 	}
 
-	header.id = idBytes
 	header.qdcount = qdcountBytes
 	header.ancount = ancountBytes
 	return header, nil
@@ -222,6 +217,14 @@ func ToBytes(header Header) [12]byte {
 func Reply(header Header) Header {
 	newHeader := header
 	newHeader.qr = 1
+	newHeader.aa = 0
+	newHeader.tc = 0
+	newHeader.ra = 0
+	if header.opcode == 0 {
+		newHeader.rcode = 0
+	} else {
+		newHeader.rcode = 4
+	}
 	return newHeader
 }
 

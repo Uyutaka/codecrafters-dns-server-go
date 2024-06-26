@@ -42,7 +42,7 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		headerWithId, err := util.NewHeaderWithIdAndQdcountAndAncount(header, 1234, 1, 1)
+		headerWithId, err := util.NewHeaderWithQdcountAndAncount(header, 1, 1)
 		if err != nil {
 			fmt.Println(err)
 		}
