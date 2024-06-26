@@ -42,7 +42,7 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		headerWithId, err := util.NewHeaderWithIdAndQdcount(header, 1234, 1)
+		headerWithId, err := util.NewHeaderWithIdAndQdcountAndAncount(header, 1234, 1, 1)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -58,6 +58,16 @@ func main() {
 		}
 		questionByte := util.QuestionToBytes(question)
 		response = append(response, questionByte...)
+
+		// Answer Section
+		rr, err := util.NewResourceRecord("codecrafters.io")
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		answerSection := util.NewAnswer(rr)
+		answerSectionBytes := util.AnswerToBytes(answerSection)
+		response = append(response, answerSectionBytes...)
 
 		_, err = udpConn.WriteToUDP(response, source)
 		if err != nil {

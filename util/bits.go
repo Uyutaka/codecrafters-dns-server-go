@@ -165,7 +165,7 @@ func NewHeader(value [12]byte) (Header, error) {
 	return header, nil
 }
 
-func NewHeaderWithIdAndQdcount(header Header, id uint, qdcount uint) (Header, error) {
+func NewHeaderWithIdAndQdcountAndAncount(header Header, id uint, qdcount uint16, ancount uint16) (Header, error) {
 	idBytes, err := NewSixteenBit([2]byte{byte(id >> 8), byte(id & 0xff)})
 	if err != nil {
 		return Header{}, err
@@ -176,8 +176,14 @@ func NewHeaderWithIdAndQdcount(header Header, id uint, qdcount uint) (Header, er
 		return Header{}, err
 	}
 
+	ancountBytes, err := NewSixteenBit([2]byte{byte(ancount >> 8), byte(ancount & 0xff)})
+	if err != nil {
+		return Header{}, err
+	}
+
 	header.id = idBytes
 	header.qdcount = qdcountBytes
+	header.ancount = ancountBytes
 	return header, nil
 }
 
@@ -313,6 +319,76 @@ func QuestionToBytes(question Question) []byte {
 	questionBytes = append(questionBytes, question.domain...)
 	questionBytes = append(questionBytes, typeSlice...)
 	questionBytes = append(questionBytes, classSlice...)
-	
+
 	return questionBytes
+}
+
+type Answer struct {
+	rr []ResourceRecord
+}
+
+type ResourceRecord struct {
+	domain     []byte
+	recordType [2]byte
+	class      [2]byte
+	ttl        [4]byte
+	rdlength   [2]byte
+	rdata      []byte
+}
+
+func NewTTL(time uint32) [4]byte {
+	return [4]byte{
+		byte(time >> 24),
+		byte(time >> 16),
+		byte(time >> 8),
+		byte(time)}
+}
+
+func NewLength(length uint16) [2]byte {
+	return [2]byte{
+		byte(length >> 8),
+		byte(length),
+	}
+}
+
+func NewResourceRecord(domain string) (ResourceRecord, error) {
+	domainByte := DomainToByte(domain)
+	recordType, err := NewRecordType(A)
+	if err != nil {
+		return ResourceRecord{}, err
+	}
+	class, err := NewClass(IN)
+	if err != nil {
+		return ResourceRecord{}, err
+	}
+	ttl := NewTTL(60)
+	length := NewLength(4)
+
+	return ResourceRecord{domain: domainByte, recordType: recordType, class: class, ttl: ttl, rdlength: length, rdata: []byte{0x08, 0x08, 0x08, 0x08}}, nil
+}
+
+func NewAnswer(rr ResourceRecord) Answer {
+	var ans Answer
+	ans.rr = append(ans.rr, rr)
+	return ans
+}
+
+func AnswerToBytes(answer Answer) []byte {
+	var answerBytes []byte
+
+	// TODO: validation of length
+	rrData := answer.rr[0]
+
+	typeSlice := rrData.recordType[:]
+	classSlice := rrData.class[:]
+	ttlSlice := rrData.ttl[:]
+	rdlengthSlice := rrData.rdlength[:]
+
+	answerBytes = append(answerBytes, rrData.domain...)
+	answerBytes = append(answerBytes, typeSlice...)
+	answerBytes = append(answerBytes, classSlice...)
+	answerBytes = append(answerBytes, ttlSlice...)
+	answerBytes = append(answerBytes, rdlengthSlice...)
+	answerBytes = append(answerBytes, rrData.rdata...)
+	return answerBytes
 }
