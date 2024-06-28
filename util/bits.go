@@ -182,7 +182,7 @@ func NewHeaderWithQdcountAndAncount(header Header, qdcount uint16, ancount uint1
 	return header, nil
 }
 
-func ToBytes(header Header) [12]byte {
+func HeaderToBytes(header Header) [12]byte {
 	var result [12]byte
 
 	// Convert id to bytes
@@ -312,6 +312,76 @@ func NewQuestion(domain string, recordType uint8, class uint8) (Question, error)
 	return Question{domain: domainByte, recordType: recordTypeByte, class: classByte}, nil
 }
 
+func NewQuestionFromByte(question []byte) (Question, error) {
+
+	domainEnd, err := NullIndex(question)
+	if err != nil {
+		return Question{}, err
+	}
+	domainByte := question[0:domainEnd]
+	domainByte = append(domainByte, 0x00)
+
+	recordTypeByte, err := NewRecordType(A)
+	if err != nil {
+		return Question{}, err
+	}
+	classByte, err := NewClass(IN)
+	if err != nil {
+		return Question{}, err
+	}
+
+	return Question{domain: domainByte, recordType: recordTypeByte, class: classByte}, nil
+}
+
+func NullIndex(buf []byte) (int, error) {
+	start := 0
+	end := -1
+
+	for i := start; i < len(buf); i++ {
+		if buf[i] == 0x0 {
+			end = i
+			break
+		}
+	}
+	if end == -1 {
+		return -1, errors.New("not found")
+	}
+
+	return end, nil
+}
+func DomainInQuestion(q Question) (string, error) {
+
+	domain, err := byteToDomain(q.domain)
+	if err != nil {
+		return "", err
+	}
+	return domain, nil
+}
+
+func byteToDomain(input []byte) (string, error) {
+	if input[len(input)-1] != 0x00 {
+		return "", errors.New("invalid input (last element is not null)")
+	}
+
+	buf := append([]byte{}, input...)
+	buf = buf[:len(buf)-1]
+
+	var domain string
+	i := 0
+	for i < len(buf) {
+		length := int(buf[i])
+		if i+length >= len(buf) {
+			return "", errors.New("invalid input")
+		}
+		if domain != "" {
+			domain += "."
+		}
+		domain += string(buf[i+1 : i+1+length])
+		i += length + 1
+	}
+	return domain, nil
+}
+
 func QuestionToBytes(question Question) []byte {
 
 	var questionBytes []byte
@@ -366,7 +436,6 @@ func NewResourceRecord(domain string) (ResourceRecord, error) {
 	}
 	ttl := NewTTL(60)
 	length := NewLength(4)
-
 	return ResourceRecord{domain: domainByte, recordType: recordType, class: class, ttl: ttl, rdlength: length, rdata: []byte{0x08, 0x08, 0x08, 0x08}}, nil
 }
 
@@ -394,4 +463,28 @@ func AnswerToBytes(answer Answer) []byte {
 	answerBytes = append(answerBytes, rdlengthSlice...)
 	answerBytes = append(answerBytes, rrData.rdata...)
 	return answerBytes
+}
+
+func QuestionBytes(buf []byte) ([]byte, error) {
+	if len(buf) < 13 {
+		return []byte{}, errors.New("buf less than 12")
+	}
+
+	start := 12
+	end := 0
+
+	for i := start; i < len(buf); i++ {
+		if buf[i] == 0x0 {
+			end = i
+			break
+		}
+	}
+
+	if end == 0 {
+		return []byte{}, errors.New("invalid format")
+	}
+
+	end += 5
+
+	return buf[start:end], nil
 }

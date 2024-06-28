@@ -33,11 +33,14 @@ func main() {
 		receivedData := string(buf[:size])
 		fmt.Printf("Received %d bytes from %s: %s\n", size, source, receivedData)
 
+		fmt.Printf("Received buffer: %x\n", buf)
 		first12Bytes := buf[:12]
 		var first12BytesArray [12]byte
 		copy(first12BytesArray[:], first12Bytes)
 
-		// Header Section
+		////////////////////
+		// Header Section //
+		////////////////////
 		header, err := util.NewHeader(first12BytesArray)
 		if err != nil {
 			fmt.Println(err)
@@ -47,27 +50,46 @@ func main() {
 			fmt.Println(err)
 		}
 		answerHeader := util.Reply(headerWithId)
-		answerBytes := util.ToBytes(answerHeader)
+		answerBytes := util.HeaderToBytes(answerHeader)
 
 		response := answerBytes[:]
 
-		// Question Section
-		question, err := util.NewQuestion("codecrafters.io", util.A, util.IN)
+		//////////////////////
+		// Question Section //
+		//////////////////////
+		questionBufByte, err := util.QuestionBytes(buf)
+		if err != nil {
+			fmt.Println(err)
+		}
+		question, err := util.NewQuestionFromByte(questionBufByte)
+
 		if err != nil {
 			fmt.Println(err)
 		}
 		questionByte := util.QuestionToBytes(question)
 		response = append(response, questionByte...)
 
-		// Answer Section
-		rr, err := util.NewResourceRecord("codecrafters.io")
+		////////////////////
+		// Answer Section //
+		////////////////////
+		domainStr, err := util.DomainInQuestion(question)
+		if err != nil {
+			fmt.Println(err)
+		}
+		rr, err := util.NewResourceRecord(domainStr)
 		if err != nil {
 			fmt.Println(err)
 		}
 
 		answerSection := util.NewAnswer(rr)
 		answerSectionBytes := util.AnswerToBytes(answerSection)
+
 		response = append(response, answerSectionBytes...)
+
+		///////////
+		// Debug //
+		///////////
+		fmt.Printf("Response buffer: %x\n", response)
 
 		_, err = udpConn.WriteToUDP(response, source)
 		if err != nil {

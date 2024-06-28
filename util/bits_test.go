@@ -192,7 +192,7 @@ func TestToBytes(t *testing.T) {
 		}
 		for _, tt := range tests {
 
-			got := ToBytes(tt.input)
+			got := HeaderToBytes(tt.input)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("NewHeader(%08b) = %08b; want %08b", tt.input, got, tt.want)
 			}
@@ -311,6 +311,155 @@ func TestNewClass(t *testing.T) {
 			}
 			if err == nil {
 				t.Errorf("NewClass(%d) = %08b; do not want nil", tt.input, got)
+			}
+		}
+	})
+}
+
+func TestQuestionBytes(t *testing.T) {
+	t.Run("AnswerBytes", func(t *testing.T) {
+		tests := []struct {
+			input []byte
+			want  []byte
+		}{
+			{
+				[]byte{'<', '-', '-', 'h', 'e', 'a', 'd', 'e', 'r', '-', '-', '>', 'n', 'a', 'm', 'e', 0x0, 't', 'y', 'c', 'l', 'a', 'n', 's', 'w', 'e', 'r'},
+				[]byte{'n', 'a', 'm', 'e', 0x0, 't', 'y', 'c', 'l'},
+			},
+			{
+				[]byte{'<', '-', '-', 'h', 'e', 'a', 'd', 'e', 'r', '-', '-', '>', 'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0, 't', 'y', 'c', 'l', 'a', 'n', 's', 'w', 'e', 'r', 'h', 'o', 'g', 'e'},
+				[]byte{'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0, 't', 'y', 'c', 'l'},
+			},
+		}
+		for _, tt := range tests {
+			got, _ := QuestionBytes(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("QuestionBytes(%c) = %c; \nwant %c", tt.input, got, tt.want)
+			}
+		}
+	})
+	t.Run("AnswerByte_Failure", func(t *testing.T) {
+
+		tests := []struct {
+			input []byte
+			want  []byte
+		}{
+			{
+				// less than 13 bytes (= only header section)
+				[]byte{'h', 'e', 'a', 'd', 'e', 'r', 's', 'e', 'c', 't', 'i', 'o'},
+				[]byte{},
+			},
+			{
+				// without null byte
+				[]byte{'h', 'e', 'a', 'd', 'e', 'r', 's', 'e', 'c', 't', 'i', 'o', 'n', 'n', 'a'},
+				[]byte{},
+			},
+		}
+		for _, tt := range tests {
+			got, err := QuestionBytes(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("QuestionBytes(%c) = %c; \nwant %c", tt.input, got, tt.want)
+			}
+			if err == nil {
+				t.Errorf("QuestionBytes(%c) = %c; do not want nil", tt.input, got)
+			}
+		}
+	})
+}
+
+func TestByteToDomain(t *testing.T) {
+	t.Run("ByteToDomain", func(t *testing.T) {
+		tests := []struct {
+			input []byte
+			want  string
+		}{
+			{
+				[]byte{0x0c, 'c', 'o', 'd', 'e', 'c', 'r', 'a', 'f', 't', 'e', 'r', 's', 0x2, 'i', 'o', 0x00},
+				"codecrafters.io",
+			},
+			{
+				[]byte{0x06, 'g', 'o', 'o', 'g', 'l', 'e', 0x03, 'c', 'o', 'm', 0x00},
+				"google.com",
+			},
+		}
+		for _, tt := range tests {
+			got, _ := byteToDomain(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ByteToDomain(%c) = %s; \nwant %s", tt.input, got, tt.want)
+			}
+		}
+	})
+	t.Run("ByteToDomain_Failure", func(t *testing.T) {
+
+		tests := []struct {
+			input []byte
+			want  string
+		}{
+			{
+				[]byte{0x0e, 'c', 'o', 'd', 'e', 'c', 'r', 'a', 'f', 't', 'e', 'r', 's', 0x2, 'i', 'o'},
+				"",
+			},
+			{
+				[]byte{0x06, 'g', 'o', 'o', 'g', 'l', 'e', 0x04, 'c', 'o', 'm'},
+				"",
+			},
+		}
+		for _, tt := range tests {
+			got, err := byteToDomain(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ByteToDomain(%c) = %s; \nwant %s", tt.input, got, tt.want)
+			}
+			if err == nil {
+				t.Errorf("ByteToDomain(%c) = %s; do not want nil", tt.input, got)
+			}
+		}
+	})
+}
+
+func TestNullIndex(t *testing.T) {
+	t.Run("NullIndex", func(t *testing.T) {
+		tests := []struct {
+			input []byte
+			want  int
+		}{
+			{
+				[]byte{'c', 'o', 'd', 'e', 0x00},
+				4,
+			},
+			{
+				[]byte{'c', 'o', 0x00, 'e'},
+				2,
+			},
+		}
+		for _, tt := range tests {
+			got, _ := NullIndex(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NullIndex(%c) = %d; \nwant %d", tt.input, got, tt.want)
+			}
+		}
+	})
+	t.Run("NullIndex_Failure", func(t *testing.T) {
+
+		tests := []struct {
+			input []byte
+			want  int
+		}{
+			{
+				[]byte{'c', 'o', 'd', 'e'},
+				-1,
+			},
+			{
+				[]byte{},
+				-1,
+			},
+		}
+		for _, tt := range tests {
+			got, err := NullIndex(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NullIndex(%c) = %d; \nwant %d", tt.input, got, tt.want)
+			}
+			if err == nil {
+				t.Errorf("NullIndex(%c) = %d; do not want nil", tt.input, got)
 			}
 		}
 	})
