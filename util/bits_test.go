@@ -164,12 +164,29 @@ func TestNewHeader(t *testing.T) {
 			{[12]byte{255, 25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, Header{id: [2]byte{255, 25}}},
 			{[12]byte{0, 0, 0b11111101, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 				Header{qr: 1, opcode: 0b1111, aa: 1, tc: 0, rd: 1}},
+			{
+				[12]byte{
+					0x1b, 0xc3,
+					0x01, 0x00,
+					0x12, 0x21,
+					0x12, 0x34,
+					0x56, 0x78,
+					0x9a, 0xbc},
+				Header{
+					id: SixteenBit{0x1b, 0xc3},
+					qr: OneBit(0), opcode: FourBit(0), aa: OneBit(0), tc: OneBit(0), rd: OneBit(1), ra: OneBit(0x0), z: ThreeBit(0x0), rcode: FourBit(0x0),
+					qdcount: SixteenBit{0x12, 0x21},
+					ancount: SixteenBit{0x12, 0x34},
+					nscount: SixteenBit{0x56, 0x78},
+					arcount: SixteenBit{0x9a, 0xbc},
+				},
+			},
 		}
 		for _, tt := range tests {
 
 			got, err := NewHeader(tt.input)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewHeader(%08b) = %08b; want %08b", tt.input, got, tt.want)
+				t.Errorf("NewHeader(%x) = %x; want %x", tt.input, got, tt.want)
 			}
 			if err != nil {
 				t.Errorf("NewHeader(%08b) = %08b; want nil", tt.input, got)

@@ -2,6 +2,7 @@ package util
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -73,6 +74,26 @@ type Header struct {
 	arcount SixteenBit
 }
 
+func DebugHeader(h Header) {
+	fmt.Println("Debug Header")
+	fmt.Printf("id:\t%x\n", h.id)
+	fmt.Printf("qr:\t%x\n", h.qr)
+	fmt.Printf("opcode:\t%x\n", h.opcode)
+	fmt.Printf("aa:\t%x\n", h.aa)
+	fmt.Printf("tc:\t%x\n", h.tc)
+	fmt.Printf("rd:\t%x\n", h.rd)
+
+	fmt.Printf("ra:\t%x\n", h.ra)
+	fmt.Printf("z:\t%x\n", h.z)
+	fmt.Printf("rcode:\t%x\n", h.rcode)
+	fmt.Printf("qdcount:\t%x\n", h.qdcount)
+	fmt.Printf("ancount:\t%x\n", h.ancount)
+
+	fmt.Printf("nscount:\t%x\n", h.nscount)
+
+	fmt.Printf("arcount:\t%x\n", h.arcount)
+}
+
 func NewHeader(value [12]byte) (Header, error) {
 	if len(value) != 12 {
 		return Header{}, errors.New("size is invalid")
@@ -123,25 +144,25 @@ func NewHeader(value [12]byte) (Header, error) {
 	}
 
 	// 4-11
-	copy(SixteenBitArray[:], value[3:5])
-
+	copy(SixteenBitArray[:], value[4:6])
 	qdcount, err := NewSixteenBit(SixteenBitArray)
 	if err != nil {
 		return Header{}, err
 	}
-	copy(SixteenBitArray[:], value[5:7])
 
+	copy(SixteenBitArray[:], value[6:8])
 	ancount, err := NewSixteenBit(SixteenBitArray)
 	if err != nil {
 		return Header{}, err
 	}
-	copy(SixteenBitArray[:], value[7:9])
 
+	copy(SixteenBitArray[:], value[8:10])
 	nscount, err := NewSixteenBit(SixteenBitArray)
 	if err != nil {
 		return Header{}, err
 	}
-	copy(SixteenBitArray[:], value[9:11])
+
+	copy(SixteenBitArray[:], value[10:12])
 	arcount, err := NewSixteenBit(SixteenBitArray)
 	if err != nil {
 		return Header{}, err
@@ -212,6 +233,22 @@ func HeaderToBytes(header Header) [12]byte {
 	result[11] = header.arcount[1]
 
 	return result
+}
+
+func (h Header) GetQdcount() [2]byte {
+	return [2]byte(h.qdcount)
+}
+
+func (h Header) GetAncount() [2]byte {
+	return [2]byte(h.ancount)
+}
+
+func (h Header) GetNscount() [2]byte {
+	return [2]byte(h.nscount)
+}
+
+func (h Header) GetArcount() [2]byte {
+	return [2]byte(h.arcount)
 }
 
 func Reply(header Header) Header {

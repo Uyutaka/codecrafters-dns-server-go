@@ -45,6 +45,10 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
+		fmt.Println("Received Buf in Header section")
+		fmt.Printf("%x\n", first12BytesArray)
+		fmt.Println("Received Header")
+		util.DebugHeader(header)
 		headerWithId, err := util.NewHeaderWithQdcountAndAncount(header, 1, 1)
 		if err != nil {
 			fmt.Println(err)
