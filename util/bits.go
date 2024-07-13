@@ -1,8 +1,10 @@
 package util
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 )
 
@@ -236,9 +238,7 @@ func HeaderToBytes(header Header) [12]byte {
 }
 
 func (h Header) GetQdcount() uint {
-	// [2]byte(h.qdcount)
 	return uint(h.qdcount[0])<<8 | uint(h.qdcount[1])
-	// return
 }
 
 func (h Header) GetAncount() [2]byte {
@@ -268,8 +268,6 @@ func Reply(header Header) Header {
 	// ancount
 	newHeader.ancount = header.qdcount
 
-	fmt.Println("in Reply()")
-	fmt.Println(newHeader)
 	return newHeader
 }
 
@@ -481,7 +479,12 @@ func byteToDomain(b []byte) string {
 }
 
 func isCompressedDomain(domainByte []byte) bool {
-	return domainByte[len(domainByte)-1] != 0x00
+	for i := 0; i < len(domainByte); i++ {
+		if domainByte[i] >= 0xc0 {
+			return true
+		}
+	}
+	return false
 }
 
 func byteEndingWithNullToDomain(input []byte) (string, error) {
@@ -578,9 +581,7 @@ func AnswerToBytes(answer Answer) []byte {
 	var answerBytes []byte
 
 	// TODO: validation of length
-	//TODODODODOOD
 	for _, rrData := range answer.rr {
-		// fmt.Printf("Index: %d, Value: %d\n", index, value)
 		typeSlice := rrData.recordType[:]
 		classSlice := rrData.class[:]
 		ttlSlice := rrData.ttl[:]
@@ -593,8 +594,6 @@ func AnswerToBytes(answer Answer) []byte {
 		answerBytes = append(answerBytes, rdlengthSlice...)
 		answerBytes = append(answerBytes, rrData.rdata...)
 	}
-
-	// rrData := answer.rr[0]
 
 	return answerBytes
 }
@@ -644,4 +643,205 @@ func QuestionBytes(buf []byte, numQuestion int) ([]byte, error) {
 	}
 
 	return buf[start:end], nil
+}
+
+type Resolver struct {
+	ip   net.IP
+	port string
+}
+
+func NewResolver(ip net.IP, port string) Resolver {
+	return Resolver{ip: ip, port: port}
+}
+
+func IsResolver(res Resolver) bool {
+	if res.ip == nil || res.port == "" {
+		return false
+	}
+	return true
+}
+
+// type DNSRequest struct {
+// 	Header   Header
+// 	Question Question
+// }
+
+// func NewHeaderForForward(origin Header) Header {
+// 	// set 1 as #question
+// 	// origin.qdcount = 1
+// 	fmt.Println("newHeaderFor forward")
+// 	fmt.Println(origin)
+// 	return origin
+
+// }
+
+// func NewDNSRequest(header Header, question Question) DNSRequest {
+
+// }
+// func SetupForwarding() (*net.UDPAddr, error) {
+// 	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:2053")
+// 	if err != nil {
+// 		fmt.Println("Failed to resolve UDP address:", err)
+// 		return
+// 	}
+
+// 	udpConn, err := net.ListenUDP("udp", udpAddr)
+// 	if err != nil {
+// 		fmt.Println("Failed to bind to address:", err)
+// 		return
+// 	}
+// 	defer udpConn.Close()
+// }
+
+func ForwardDNSRequest(resolver Resolver, header Header, question Question, domainString string) (ResourceRecord, error) {
+	// Resolve the UDP address
+	serverAddr, err := net.ResolveUDPAddr("udp", resolver.ip.String()+":"+resolver.port)
+	if err != nil {
+		fmt.Println("Error resolving address:", err)
+		return ResourceRecord{}, err
+	}
+
+	// Create a UDP connection
+	conn, err := net.DialUDP("udp", nil, serverAddr)
+	if err != nil {
+		fmt.Println("Error creating UDP connection:", err)
+		return ResourceRecord{}, err
+	}
+	defer conn.Close()
+
+	// The request to send
+	var request []byte
+
+	// Header
+	requestHeader := header.deepCopyHeader()
+	newQdCount, _ := NewSixteenBit([2]byte{0, 1})
+
+	requestHeader.qdcount = newQdCount
+	responseHeaderBytes := HeaderToBytes(requestHeader)
+
+	request = responseHeaderBytes[:]
+
+	// Question
+	// questions := []Question{question}
+	// domainStrs, err := DomainsInQuestion(questions)
+	// if err != nil {
+	// 	fmt.Println("Error in DomainInQuestion:", err)
+	// 	return ResourceRecord{}, err
+	// }
+	q, err := NewQuestion(domainString, A, IN)
+	if err != nil {
+		return ResourceRecord{}, err
+	}
+	questions := []Question{q}
+
+	requestQuestion := QuestionToBytes(questions)
+	request = append(request, requestQuestion...)
+
+	/////////////////////
+	// Send the request
+	/////////////////////
+	_, err = conn.Write(request)
+	if err != nil {
+		fmt.Println("Error sending request:", err)
+		return ResourceRecord{}, err
+	}
+
+	// Buffer to hold the response
+	buffer := make([]byte, 1024)
+
+	// Read the response
+	n, addr, err := conn.ReadFromUDP(buffer)
+	if err != nil {
+		fmt.Println("Error reading response:", err)
+		return ResourceRecord{}, err
+	}
+
+	fmt.Printf("DNS Received response from %s: %s\n", addr, string(buffer[:n]))
+	fmt.Printf("DNS Received from %s: %s\n", addr, buffer)
+	fmt.Printf("DNS Received buffer: %s\n", FormatBytes(buffer))
+
+	// fmt.Printf("DNS Received buffer: %s\n", FormatBytes(buffer))
+
+	if strings.Contains(string(buffer), "abclongassdomainnamecom") {
+		fmt.Println("HITHITHIT")
+	}
+
+	// Extract Answer
+	// fmt.Printf("DNS Answer buffer: %s\n", FormatBytes(buffer[12+len(requestQuestion):]))
+	// fmt.Printf("DNS Answer buffer: %s\n", FormatBytes(buffer[12+len(requestQuestion)+len(requestQuestion):]))
+	ttl := buffer[12+len(requestQuestion)+len(requestQuestion) : 12+len(requestQuestion)+len(requestQuestion)+4]
+	rdLength := buffer[12+len(requestQuestion)+len(requestQuestion)+4 : 12+len(requestQuestion)+len(requestQuestion)+4+2]
+
+	rdLengthIn4Bytes := make([]byte, 4)
+	rdLengthIn4Bytes[0] = 0x00
+	rdLengthIn4Bytes[1] = 0x00
+	copy(rdLengthIn4Bytes[2:], rdLength)
+
+	length := binary.BigEndian.Uint32(rdLengthIn4Bytes)
+	rdate := buffer[12+len(requestQuestion)+len(requestQuestion)+4+2 : 12+len(requestQuestion)+len(requestQuestion)+4+2+int(length)]
+
+	// fmt.Printf("ttl: %s\n", FormatBytes(ttl))
+	// fmt.Printf("rdLength: %s\n", FormatBytes(rdLength))
+	// fmt.Printf("rdate: %s\n", FormatBytes(rdate))
+
+	// NewResourceRecord()
+
+
+	domain := DomainToByte(domainString)
+	
+	recordType, err := NewRecordType(A)
+	if err != nil {
+		return ResourceRecord{}, err
+	}
+	class, err := NewClass(IN)
+	if err != nil {
+		return ResourceRecord{}, err
+	}
+
+	var ttlArray [4]byte
+	copy(ttlArray[:], ttl)
+
+	var rdLengthArray [2]byte
+	copy(rdLengthArray[:], rdLength)
+
+	return ResourceRecord{
+		domain:     domain,
+		recordType: recordType,
+		class:      class,
+		ttl:        ttlArray,
+		rdlength:   rdLengthArray,
+		rdata:      rdate,
+	}, nil
+}
+
+func (src Header) deepCopyHeader() Header {
+	return Header{
+		id:      src.id,
+		qr:      src.qr,
+		opcode:  src.opcode,
+		aa:      src.aa,
+		tc:      src.tc,
+		rd:      src.rd,
+		ra:      src.ra,
+		z:       src.z,
+		rcode:   src.rcode,
+		qdcount: src.qdcount,
+		ancount: src.ancount,
+		nscount: src.nscount,
+		arcount: src.arcount,
+	}
+}
+
+func FormatBytes(data []byte) string {
+	var sb strings.Builder
+	for i, b := range data {
+		if i > 0 && i%2 == 0 {
+			sb.WriteString(" ")
+		}
+		if i%12 == 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(fmt.Sprintf("%02x", b))
+	}
+	return sb.String()
 }

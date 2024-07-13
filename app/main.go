@@ -3,12 +3,29 @@ package main
 import (
 	"fmt"
 	"net"
-	"strings"
+	"os"
 
 	"github.com/codecrafters-io/dns-server-starter-go/util"
 )
 
 func main() {
+	args := os.Args
+	var resolver util.Resolver
+	if len(args) == 3 {
+		host, port, err := net.SplitHostPort(args[2])
+		if err != nil {
+			fmt.Println("Error:", err)
+			return
+		}
+		ip := net.ParseIP(host)
+		if ip == nil {
+			fmt.Println("Invalid IP address")
+			return
+		}
+		resolver = util.NewResolver(ip, port)
+		fmt.Println(resolver)
+	}
+
 	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:2053")
 	if err != nil {
 		fmt.Println("Failed to resolve UDP address:", err)
@@ -33,9 +50,7 @@ func main() {
 
 		receivedData := string(buf[:size])
 		fmt.Printf("Received %d bytes from %s: %s\n", size, source, receivedData)
-
-		// fmt.Printf("Received buffer: %x\n", buf)
-		fmt.Printf("Received buffer: %s\n", FormatBytes(buf))
+		fmt.Printf("Received buffer: %s\n", util.FormatBytes(buf))
 
 		first12Bytes := buf[:12]
 		var first12BytesArray [12]byte
@@ -48,40 +63,19 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		// fmt.Println("Received Buf in Header section")
-		// fmt.Printf("%x\n", first12BytesArray)
-		// fmt.Println("Received Header")
-		// fmt.Println("qdcount: ", header.GetQdcount())
-		// fmt.Println("ancount: ", header.GetAncount())
-		// fmt.Println("nscount: ", header.GetNscount())
-		// fmt.Println("arcount: ", header.GetArcount())
-		// util.DebugHeader(header)
-		// headerWithId, err := util.NewHeaderWithQdcountAndAncount(header, 1, 1)
-		// if err != nil {
-		// fmt.Println(err)
-		// }
-		answerHeader := util.Reply(header)
-		// fmt.Println("Answeered Header")
-		// fmt.Println("qdcount: ", answerHeader.GetQdcount())
-		// fmt.Println("ancount: ", answerHeader.GetAncount())
-		// fmt.Println("nscount: ", answerHeader.GetNscount())
-		// fmt.Println("arcount: ", answerHeader.GetArcount())
-		answerBytes := util.HeaderToBytes(answerHeader)
+		responseHeader := util.Reply(header)
+		responseHeaderBytes := util.HeaderToBytes(responseHeader)
 
-		response := answerBytes[:]
+		response := responseHeaderBytes[:]
 
 		//////////////////////
 		// Question Section //
 		//////////////////////
-		numQuestion := answerHeader.GetQdcount()
-		fmt.Println(numQuestion)
+		numQuestion := responseHeader.GetQdcount()
 		questionBufByte, err := util.QuestionBytes(buf, int(numQuestion))
 		if err != nil {
 			fmt.Println(err)
 		}
-		fmt.Println("question buf")
-		fmt.Printf("%x\n", questionBufByte)
-		fmt.Printf("%c\n", questionBufByte)
 
 		questions, err := util.NewQuestionsFromByte(questionBufByte, int(numQuestion))
 
@@ -101,17 +95,19 @@ func main() {
 
 		var rrs []util.ResourceRecord
 		for i := 0; i < len(domainStrs); i++ {
-			rr, err := util.NewResourceRecord(domainStrs[i])
+			var rr util.ResourceRecord
+			if util.IsResolver(resolver) {
+				rr, err = util.ForwardDNSRequest(resolver, header, questions[i], domainStrs[i])
+			} else {
+				rr, err = util.NewResourceRecord(domainStrs[i])
+			}
 			if err != nil {
 				fmt.Println(err)
 			}
-			fmt.Println("RR")
-			fmt.Printf("%0x\n", rr)
+
 			rrs = append(rrs, rr)
 		}
 
-		// fmt.Println("rrs")
-		// fmt.Println(len(rrs))
 		answerSection := util.NewAnswer(rrs)
 		answerSectionBytes := util.AnswerToBytes(answerSection)
 
@@ -121,22 +117,11 @@ func main() {
 		// Debug //
 		///////////
 		// fmt.Printf("Response buffer: %x\n", response)
-		fmt.Printf("Response buffer: %s\n", FormatBytes(response))
+		fmt.Printf("Response buffer: %s\n", util.FormatBytes(response))
 
 		_, err = udpConn.WriteToUDP(response, source)
 		if err != nil {
 			fmt.Println("Failed to send response:", err)
 		}
 	}
-}
-
-func FormatBytes(data []byte) string {
-	var sb strings.Builder
-	for i, b := range data {
-		if i > 0 && i%2 == 0 {
-			sb.WriteString(" ")
-		}
-		sb.WriteString(fmt.Sprintf("%02x", b))
-	}
-	return sb.String()
 }
