@@ -334,58 +334,147 @@ func TestNewClass(t *testing.T) {
 }
 
 func TestQuestionBytes(t *testing.T) {
-	t.Run("AnswerBytes", func(t *testing.T) {
+	t.Run("QuestionBytes", func(t *testing.T) {
 		tests := []struct {
-			input []byte
-			want  []byte
+			buf         []byte
+			numQuestion int
+			want        []byte
 		}{
+
 			{
 				[]byte{'<', '-', '-', 'h', 'e', 'a', 'd', 'e', 'r', '-', '-', '>', 'n', 'a', 'm', 'e', 0x0, 't', 'y', 'c', 'l', 'a', 'n', 's', 'w', 'e', 'r'},
+				1,
 				[]byte{'n', 'a', 'm', 'e', 0x0, 't', 'y', 'c', 'l'},
 			},
 			{
 				[]byte{'<', '-', '-', 'h', 'e', 'a', 'd', 'e', 'r', '-', '-', '>', 'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0, 't', 'y', 'c', 'l', 'a', 'n', 's', 'w', 'e', 'r', 'h', 'o', 'g', 'e'},
+				1,
 				[]byte{'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0, 't', 'y', 'c', 'l'},
+			},
+			{
+				[]byte{'<', '-', '-', 'h', 'e', 'a', 'd', 'e', 'r', '-', '-', '>', 'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0, 't', 'y', 'c', 'l', 'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0, 't', 'y', 'c', 'l', 'a', 'n', 's', 'w', 'e', 'r', 'h', 'o', 'g', 'e'},
+				2,
+				[]byte{'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0, 't', 'y', 'c', 'l', 'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0, 't', 'y', 'c', 'l'},
+			},
+			{
+				[]byte{'<', '-', '-', 'h', 'e', 'a', 'd', 'e', 'r', '-', '-', '>', 'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0, 't', 'y', 0x0, 0x0, 'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0, 't', 'y', 'c', 'l', 'a', 'n', 's', 'w', 'e', 'r', 'h', 'o', 'g', 'e'},
+				2,
+				[]byte{'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0, 't', 'y', 0x0, 0x0, 'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0, 't', 'y', 'c', 'l'},
+			},
+			{
+				// When second question is compressed
+				[]byte{'<', '-', '-', 'h', 'e', 'a', 'd', 'e', 'r', '-', '-', '>',
+					0x03, 'a', 'b', 'c', 0x11, 'l', 'o', 'n', 'g', 'a', 's', 's', 'd', 'o', 'm', 'a', 'i', 'n', 'n', 'a', 'm', 'e', 0x03, 'c', 'o', 'm', 0x00, 0x00, 0x01, 0x00, 0x01,
+					0x03, 'd', 'e', 'f', 0xc0, 0x10, 0x00, 0x01, 0x00, 0x01,
+					'r', 'e', 'm', 'a', 'i', 'n', 'g', 's', 'e', 'c', 't', 'i', 'o', 'n'},
+				2,
+				[]byte{
+					// abc.longassdomainname.com.  IN       A
+					0x03, 'a', 'b', 'c', 0x11, 'l', 'o', 'n', 'g', 'a', 's', 's', 'd', 'o', 'm', 'a', 'i', 'n', 'n', 'a', 'm', 'e', 0x03, 'c', 'o', 'm', 0x00, 0x00, 0x01, 0x00, 0x01,
+					// (compressed) def.longassdomainname.com.  IN       A
+					0x03, 'd', 'e', 'f', 0xc0, 0x10, 0x00, 0x01, 0x00, 0x01,
+				},
+			},
+			{
+				// When first is uncompressed question, last 2 are compressed ones
+				[]byte{'<', '-', '-', 'h', 'e', 'a', 'd', 'e', 'r', '-', '-', '>',
+					0x03, 'a', 'b', 'c', 0x11, 'l', 'o', 'n', 'g', 'a', 's', 's', 'd', 'o', 'm', 'a', 'i', 'n', 'n', 'a', 'm', 'e', 0x03, 'c', 'o', 'm', 0x00, 0x00, 0x01, 0x00, 0x01,
+					0x03, 'd', 'e', 'f', 0xc0, 0x10, 0x00, 0x01, 0x00, 0x01,
+					0x03, 'x', 'y', 'z', 0xc0, 0x10, 0x00, 0x01, 0x00, 0x01,
+					'r', 'e', 'm', 'a', 'i', 'n', 'g', 's', 'e', 'c', 't', 'i', 'o', 'n'},
+				3,
+				[]byte{
+					// abc.longassdomainname.com.  IN       A
+					0x03, 'a', 'b', 'c', 0x11, 'l', 'o', 'n', 'g', 'a', 's', 's', 'd', 'o', 'm', 'a', 'i', 'n', 'n', 'a', 'm', 'e', 0x03, 'c', 'o', 'm', 0x00, 0x00, 0x01, 0x00, 0x01,
+					// (compressed) def.longassdomainname.com.  IN       A
+					0x03, 'd', 'e', 'f', 0xc0, 0x10, 0x00, 0x01, 0x00, 0x01,
+					// (compressed) xyz.longassdomainname.com.  IN       A
+					0x03, 'x', 'y', 'z', 0xc0, 0x10, 0x00, 0x01, 0x00, 0x01,
+				},
+			},
+			{
+				// When first and last are uncompressed questions, second is compressed one
+				[]byte{'<', '-', '-', 'h', 'e', 'a', 'd', 'e', 'r', '-', '-', '>',
+					0x03, 'a', 'b', 'c', 0x11, 'l', 'o', 'n', 'g', 'a', 's', 's', 'd', 'o', 'm', 'a', 'i', 'n', 'n', 'a', 'm', 'e', 0x03, 'c', 'o', 'm', 0x00, 0x00, 0x01, 0x00, 0x01,
+					0x03, 'd', 'e', 'f', 0xc0, 0x10, 0x00, 0x01, 0x00, 0x01,
+					0x0c, 'c', 'o', 'd', 'e', 'c', 'r', 'a', 'f', 't', 'e', 'r', 's', 0x02, 'i', 'o', 0x00, 0x00, 0x01, 0x00, 0x01,
+					'r', 'e', 'm', 'a', 'i', 'n', 'g', 's', 'e', 'c', 't', 'i', 'o', 'n'},
+				3,
+				[]byte{
+					// abc.longassdomainname.com.  IN       A
+					0x03, 'a', 'b', 'c', 0x11, 'l', 'o', 'n', 'g', 'a', 's', 's', 'd', 'o', 'm', 'a', 'i', 'n', 'n', 'a', 'm', 'e', 0x03, 'c', 'o', 'm', 0x00, 0x00, 0x01, 0x00, 0x01,
+					// (compressed) def.longassdomainname.com.  IN       A
+					0x03, 'd', 'e', 'f', 0xc0, 0x10, 0x00, 0x01, 0x00, 0x01,
+					// codecrafters.io.  IN       A
+					0x0c, 'c', 'o', 'd', 'e', 'c', 'r', 'a', 'f', 't', 'e', 'r', 's', 0x02, 'i', 'o', 0x00, 0x00, 0x01, 0x00, 0x01,
+				},
 			},
 		}
 		for _, tt := range tests {
-			got, _ := QuestionBytes(tt.input)
+			got, _ := QuestionBytes(tt.buf, tt.numQuestion)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("QuestionBytes(%c) = %c; \nwant %c", tt.input, got, tt.want)
+				t.Errorf("QuestionBytes(%x) = %x; \nwant %x", tt.buf, got, tt.want)
 			}
 		}
 	})
 	t.Run("AnswerByte_Failure", func(t *testing.T) {
 
 		tests := []struct {
-			input []byte
-			want  []byte
+			buf         []byte
+			numQuestion int
+			want        []byte
 		}{
 			{
 				// less than 13 bytes (= only header section)
 				[]byte{'h', 'e', 'a', 'd', 'e', 'r', 's', 'e', 'c', 't', 'i', 'o'},
+				1,
 				[]byte{},
 			},
 			{
 				// without null byte
 				[]byte{'h', 'e', 'a', 'd', 'e', 'r', 's', 'e', 'c', 't', 'i', 'o', 'n', 'n', 'a'},
+				1,
 				[]byte{},
 			},
 		}
 		for _, tt := range tests {
-			got, err := QuestionBytes(tt.input)
+			got, err := QuestionBytes(tt.buf, tt.numQuestion)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("QuestionBytes(%c) = %c; \nwant %c", tt.input, got, tt.want)
+				t.Errorf("QuestionBytes(%c) = %c; \nwant %c", tt.buf, got, tt.want)
 			}
 			if err == nil {
-				t.Errorf("QuestionBytes(%c) = %c; do not want nil", tt.input, got)
+				t.Errorf("QuestionBytes(%c) = %c; do not want nil", tt.buf, got)
 			}
 		}
 	})
 }
 
-func TestByteToDomain(t *testing.T) {
-	t.Run("ByteToDomain", func(t *testing.T) {
+func TestIsCompressedDomain(t *testing.T) {
+	t.Run("isCompressedDomain", func(t *testing.T) {
+		tests := []struct {
+			input []byte
+			want  bool
+		}{
+			{
+				[]byte{0x08, 'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0},
+				false,
+			},
+			{
+				[]byte{0x03, 'd', 'e', 'f', 0xc0, 0x10},
+				true,
+			},
+		}
+		for _, tt := range tests {
+			got := isCompressedDomain(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("isCompressedDomain(%x) = %t; want %t", tt.input, got, tt.want)
+			}
+		}
+	})
+}
+
+func TestByteEndingWithNullToDomain(t *testing.T) {
+	t.Run("byteEndingWithNullToDomain", func(t *testing.T) {
 		tests := []struct {
 			input []byte
 			want  string
@@ -400,13 +489,13 @@ func TestByteToDomain(t *testing.T) {
 			},
 		}
 		for _, tt := range tests {
-			got, _ := byteToDomain(tt.input)
+			got, _ := byteEndingWithNullToDomain(tt.input)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ByteToDomain(%c) = %s; \nwant %s", tt.input, got, tt.want)
+				t.Errorf("byteEndingWithNullToDomain(%c) = %s; \nwant %s", tt.input, got, tt.want)
 			}
 		}
 	})
-	t.Run("ByteToDomain_Failure", func(t *testing.T) {
+	t.Run("byteEndingWithNullToDomain_Failure", func(t *testing.T) {
 
 		tests := []struct {
 			input []byte
@@ -422,12 +511,12 @@ func TestByteToDomain(t *testing.T) {
 			},
 		}
 		for _, tt := range tests {
-			got, err := byteToDomain(tt.input)
+			got, err := byteEndingWithNullToDomain(tt.input)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ByteToDomain(%c) = %s; \nwant %s", tt.input, got, tt.want)
+				t.Errorf("byteEndingWithNullToDomain(%c) = %s; \nwant %s", tt.input, got, tt.want)
 			}
 			if err == nil {
-				t.Errorf("ByteToDomain(%c) = %s; do not want nil", tt.input, got)
+				t.Errorf("byteEndingWithNullToDomain(%c) = %s; do not want nil", tt.input, got)
 			}
 		}
 	})
@@ -447,20 +536,6 @@ func TestNullIndex(t *testing.T) {
 				[]byte{'c', 'o', 0x00, 'e'},
 				2,
 			},
-		}
-		for _, tt := range tests {
-			got, _ := NullIndex(tt.input)
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NullIndex(%c) = %d; \nwant %d", tt.input, got, tt.want)
-			}
-		}
-	})
-	t.Run("NullIndex_Failure", func(t *testing.T) {
-
-		tests := []struct {
-			input []byte
-			want  int
-		}{
 			{
 				[]byte{'c', 'o', 'd', 'e'},
 				-1,
@@ -471,12 +546,177 @@ func TestNullIndex(t *testing.T) {
 			},
 		}
 		for _, tt := range tests {
-			got, err := NullIndex(tt.input)
+			got := NullIndex(tt.input)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("NullIndex(%c) = %d; \nwant %d", tt.input, got, tt.want)
 			}
-			if err == nil {
-				t.Errorf("NullIndex(%c) = %d; do not want nil", tt.input, got)
+		}
+	})
+}
+
+func TestPointerIndex(t *testing.T) {
+	t.Run("PointerIndex", func(t *testing.T) {
+		tests := []struct {
+			input []byte
+			want  int
+		}{
+			{
+				[]byte{'c', 'o', 'd', 'e', 0xc0, 't', 'e', 's', 't'},
+				4,
+			},
+			{
+				[]byte{'c', 'o', 0xc1, 0x0f},
+				2,
+			},
+			{
+				[]byte{'c', 'o', 'd', 'e'},
+				-1,
+			},
+			{
+				[]byte{},
+				-1,
+			},
+		}
+		for _, tt := range tests {
+			got := PointerIndex(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("PointerIndex(%c) = %d; \nwant %d", tt.input, got, tt.want)
+			}
+		}
+	})
+}
+
+func TestNewQuestionsFromByte(t *testing.T) {
+
+	t.Run("TestNewQuestionsFromByte", func(t *testing.T) {
+		tests := []struct {
+			buf         []byte
+			numQuestion int
+			want        []Question
+		}{
+
+			{
+				[]byte{0x04, 'n', 'a', 'm', 'e', 0x0, 't', 'y', 'c', 'l'},
+				1,
+				[]Question{
+					{
+						domain:     []byte{0x04, 'n', 'a', 'm', 'e', 0x0},
+						class:      [2]byte{0x00, 0x01},
+						recordType: [2]byte{0x00, 0x01},
+					},
+				},
+			},
+			// 2 uncompressed questions
+			{
+				[]byte{0x08, 'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0, 't', 'y', 'c', 'l', 0x04, 'n', 'a', 'm', 'e', 0x0, 't', 'y', 'c', 'l'},
+				2,
+				[]Question{
+					{
+						domain:     []byte{0x08, 'n', 'a', 'm', 'e', 'h', 'o', 'g', 'e', 0x0},
+						class:      [2]byte{0x00, 0x01},
+						recordType: [2]byte{0x00, 0x01},
+					},
+					{
+						domain:     []byte{0x04, 'n', 'a', 'm', 'e', 0x0},
+						class:      [2]byte{0x00, 0x01},
+						recordType: [2]byte{0x00, 0x01},
+					},
+				},
+			},
+			// first question is uncompressed, the second one is compressed
+			{
+				[]byte{
+					// abc.longassdomainname.com.  IN       A
+					0x03, 'a', 'b', 'c', 0x11, 'l', 'o', 'n', 'g', 'a', 's', 's', 'd', 'o', 'm', 'a', 'i', 'n', 'n', 'a', 'm', 'e', 0x03, 'c', 'o', 'm', 0x00, 0x00, 0x01, 0x00, 0x01,
+					// (compressed) def.longassdomainname.com.  IN       A
+					0x03, 'd', 'e', 'f', 0xc0, 0x10, 0x00, 0x01, 0x00, 0x01,
+				},
+				2,
+				[]Question{
+					{
+						domain:     []byte{0x03, 'a', 'b', 'c', 0x11, 'l', 'o', 'n', 'g', 'a', 's', 's', 'd', 'o', 'm', 'a', 'i', 'n', 'n', 'a', 'm', 'e', 0x03, 'c', 'o', 'm', 0x00},
+						class:      [2]byte{0x00, 0x01},
+						recordType: [2]byte{0x00, 0x01},
+					},
+					{
+						domain:     []byte{0x03, 'd', 'e', 'f', 0xc0, 0x10},
+						class:      [2]byte{0x00, 0x01},
+						recordType: [2]byte{0x00, 0x01},
+					},
+				},
+			},
+		}
+		for _, tt := range tests {
+			got, _ := NewQuestionsFromByte(tt.buf, tt.numQuestion)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewQuestionsFromByte(%x) = %x; \nwant %x", tt.buf, got, tt.want)
+			}
+		}
+	})
+}
+
+func TestCompressedDomainToDomain(t *testing.T) {
+
+	t.Run("compressedDomainToDomain", func(t *testing.T) {
+		tests := []struct {
+			questions []Question
+			index     int
+			want      string
+		}{
+
+			// first question is uncompressed, the second one is compressed
+			{
+				[]Question{
+					{
+						domain:     []byte{0x03, 'a', 'b', 'c', 0x11, 'l', 'o', 'n', 'g', 'a', 's', 's', 'd', 'o', 'm', 'a', 'i', 'n', 'n', 'a', 'm', 'e', 0x03, 'c', 'o', 'm', 0x00},
+						class:      [2]byte{0x00, 0x01},
+						recordType: [2]byte{0x00, 0x01},
+					},
+					{
+						domain:     []byte{0x03, 'd', 'e', 'f', 0xc0, 0x10},
+						class:      [2]byte{0x00, 0x01},
+						recordType: [2]byte{0x00, 0x01},
+					},
+				},
+				1,
+				"def.longassdomainname.com",
+			},
+		}
+		for _, tt := range tests {
+			got, err := compressedDomainToDomain(tt.questions, tt.index)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("compressedDomainToDomain(%x, %d) = %s; \nwant %s", tt.questions, tt.index, got, tt.want)
+			}
+			if err != nil {
+				t.Errorf("compressedDomainToDomain(%x, %d) = %v; \nwant %x", tt.questions, tt.index, got, err)
+			}
+		}
+	})
+}
+
+func TestByteToDomain(t *testing.T) {
+	t.Run("byteToDomain", func(t *testing.T) {
+		tests := []struct {
+			input []byte
+			want  string
+		}{
+			{
+				[]byte{0x0c, 'c', 'o', 'd', 'e', 'c', 'r', 'a', 'f', 't', 'e', 'r', 's', 0x2, 'i', 'o'},
+				"codecrafters.io.",
+			},
+			{
+				[]byte{0x06, 'g', 'o', 'o', 'g', 'l', 'e', 0x03, 'c', 'o', 'm'},
+				"google.com.",
+			},
+			{
+				[]byte{0x03, 'd', 'e', 'f'},
+				"def.",
+			},
+		}
+		for _, tt := range tests {
+			got := byteToDomain(tt.input)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("byteToDomain(%x) = %s; \nwant %s", tt.input, got, tt.want)
 			}
 		}
 	})

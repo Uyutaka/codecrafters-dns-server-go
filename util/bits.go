@@ -235,8 +235,10 @@ func HeaderToBytes(header Header) [12]byte {
 	return result
 }
 
-func (h Header) GetQdcount() [2]byte {
-	return [2]byte(h.qdcount)
+func (h Header) GetQdcount() uint {
+	// [2]byte(h.qdcount)
+	return uint(h.qdcount[0])<<8 | uint(h.qdcount[1])
+	// return
 }
 
 func (h Header) GetAncount() [2]byte {
@@ -262,6 +264,12 @@ func Reply(header Header) Header {
 	} else {
 		newHeader.rcode = 4
 	}
+	// qdcount
+	// ancount
+	newHeader.ancount = header.qdcount
+
+	fmt.Println("in Reply()")
+	fmt.Println(newHeader)
 	return newHeader
 }
 
@@ -349,28 +357,65 @@ func NewQuestion(domain string, recordType uint8, class uint8) (Question, error)
 	return Question{domain: domainByte, recordType: recordTypeByte, class: classByte}, nil
 }
 
-func NewQuestionFromByte(question []byte) (Question, error) {
-
-	domainEnd, err := NullIndex(question)
-	if err != nil {
-		return Question{}, err
+func PointerIndex(buf []byte) int {
+	for i := 0; i < len(buf); i++ {
+		if buf[i] >= 0b11000000 {
+			return i
+		}
 	}
-	domainByte := question[0:domainEnd]
-	domainByte = append(domainByte, 0x00)
-
-	recordTypeByte, err := NewRecordType(A)
-	if err != nil {
-		return Question{}, err
-	}
-	classByte, err := NewClass(IN)
-	if err != nil {
-		return Question{}, err
-	}
-
-	return Question{domain: domainByte, recordType: recordTypeByte, class: classByte}, nil
+	return -1
 }
 
-func NullIndex(buf []byte) (int, error) {
+func NewQuestionsFromByte(question []byte, numQuestion int) ([]Question, error) {
+	var q []Question
+
+	questionSection := make([]byte, len(question))
+	copy(questionSection, question)
+
+	for i := 0; i < numQuestion; i++ {
+		nullIndex := NullIndex(questionSection)
+		pointerIndex := PointerIndex(questionSection)
+
+		var domainByte []byte
+
+		isCompressed := false
+		if nullIndex == -1 {
+			isCompressed = true
+		} else if pointerIndex == -1 {
+			isCompressed = false
+		} else if pointerIndex < nullIndex {
+			isCompressed = true
+		} else {
+			isCompressed = false
+		}
+
+		if isCompressed {
+			domainByte = questionSection[0 : pointerIndex+2]
+		} else {
+			domainByte = questionSection[0 : nullIndex+1]
+		}
+
+		recordTypeByte, err := NewRecordType(A)
+		if err != nil {
+			return []Question{}, err
+		}
+		classByte, err := NewClass(IN)
+		if err != nil {
+			return []Question{}, err
+		}
+		q = append(q, Question{domain: domainByte, recordType: recordTypeByte, class: classByte})
+		if i != numQuestion {
+			if isCompressed {
+				questionSection = questionSection[pointerIndex+4:]
+			} else {
+				questionSection = questionSection[nullIndex+5:]
+			}
+		}
+	}
+	return q, nil
+}
+
+func NullIndex(buf []byte) int {
 	start := 0
 	end := -1
 
@@ -380,22 +425,66 @@ func NullIndex(buf []byte) (int, error) {
 			break
 		}
 	}
-	if end == -1 {
-		return -1, errors.New("not found")
-	}
 
-	return end, nil
+	return end
 }
-func DomainInQuestion(q Question) (string, error) {
+func DomainsInQuestion(questions []Question) ([]string, error) {
 
-	domain, err := byteToDomain(q.domain)
+	var domains []string
+	for i := 0; i < len(questions); i++ {
+		if isCompressedDomain(questions[i].domain) {
+			domain, err := compressedDomainToDomain(questions, i)
+			if err != nil {
+				return []string{""}, err
+			}
+			domains = append(domains, domain)
+		} else {
+			domain, err := byteEndingWithNullToDomain(questions[i].domain)
+			if err != nil {
+				return []string{""}, err
+			}
+			domains = append(domains, domain)
+		}
+
+	}
+	return domains, nil
+}
+
+func compressedDomainToDomain(questions []Question, index int) (string, error) {
+
+	pointer := questions[index].domain[len(questions[index].domain)-2:]
+	firstByte := pointer[0] & 0x3F
+	pointerIndex := int(firstByte)<<8 | int(pointer[1])
+	pointerIndex -= 12 // subtract #bytes in header
+	pointingDomain, err := byteEndingWithNullToDomain(questions[0].domain[pointerIndex:])
 	if err != nil {
 		return "", err
 	}
-	return domain, nil
+	domain := byteToDomain(questions[index].domain[:len(questions[index].domain)-2])
+
+	return domain + pointingDomain, nil
 }
 
-func byteToDomain(input []byte) (string, error) {
+func byteToDomain(b []byte) string {
+	var result string
+	i := 0
+	for i < len(b) {
+		length := int(b[i])
+		i++
+		if i+length > len(b) {
+			break // safety check to avoid out-of-bounds access
+		}
+		result += string(b[i:i+length]) + "."
+		i += length
+	}
+	return result
+}
+
+func isCompressedDomain(domainByte []byte) bool {
+	return domainByte[len(domainByte)-1] != 0x00
+}
+
+func byteEndingWithNullToDomain(input []byte) (string, error) {
 	if input[len(input)-1] != 0x00 {
 		return "", errors.New("invalid input (last element is not null)")
 	}
@@ -419,17 +508,18 @@ func byteToDomain(input []byte) (string, error) {
 	return domain, nil
 }
 
-func QuestionToBytes(question Question) []byte {
+func QuestionToBytes(questions []Question) []byte {
 
 	var questionBytes []byte
 
-	typeSlice := question.recordType[:]
-	classSlice := question.class[:]
+	for i := 0; i < len(questions); i++ {
+		typeSlice := questions[i].recordType[:]
+		classSlice := questions[i].class[:]
 
-	questionBytes = append(questionBytes, question.domain...)
-	questionBytes = append(questionBytes, typeSlice...)
-	questionBytes = append(questionBytes, classSlice...)
-
+		questionBytes = append(questionBytes, questions[i].domain...)
+		questionBytes = append(questionBytes, typeSlice...)
+		questionBytes = append(questionBytes, classSlice...)
+	}
 	return questionBytes
 }
 
@@ -476,9 +566,11 @@ func NewResourceRecord(domain string) (ResourceRecord, error) {
 	return ResourceRecord{domain: domainByte, recordType: recordType, class: class, ttl: ttl, rdlength: length, rdata: []byte{0x08, 0x08, 0x08, 0x08}}, nil
 }
 
-func NewAnswer(rr ResourceRecord) Answer {
+func NewAnswer(rrs []ResourceRecord) Answer {
 	var ans Answer
-	ans.rr = append(ans.rr, rr)
+	for i := 0; i < len(rrs); i++ {
+		ans.rr = append(ans.rr, rrs[i])
+	}
 	return ans
 }
 
@@ -486,42 +578,70 @@ func AnswerToBytes(answer Answer) []byte {
 	var answerBytes []byte
 
 	// TODO: validation of length
-	rrData := answer.rr[0]
+	//TODODODODOOD
+	for _, rrData := range answer.rr {
+		// fmt.Printf("Index: %d, Value: %d\n", index, value)
+		typeSlice := rrData.recordType[:]
+		classSlice := rrData.class[:]
+		ttlSlice := rrData.ttl[:]
+		rdlengthSlice := rrData.rdlength[:]
 
-	typeSlice := rrData.recordType[:]
-	classSlice := rrData.class[:]
-	ttlSlice := rrData.ttl[:]
-	rdlengthSlice := rrData.rdlength[:]
+		answerBytes = append(answerBytes, rrData.domain...)
+		answerBytes = append(answerBytes, typeSlice...)
+		answerBytes = append(answerBytes, classSlice...)
+		answerBytes = append(answerBytes, ttlSlice...)
+		answerBytes = append(answerBytes, rdlengthSlice...)
+		answerBytes = append(answerBytes, rrData.rdata...)
+	}
 
-	answerBytes = append(answerBytes, rrData.domain...)
-	answerBytes = append(answerBytes, typeSlice...)
-	answerBytes = append(answerBytes, classSlice...)
-	answerBytes = append(answerBytes, ttlSlice...)
-	answerBytes = append(answerBytes, rdlengthSlice...)
-	answerBytes = append(answerBytes, rrData.rdata...)
+	// rrData := answer.rr[0]
+
 	return answerBytes
 }
 
-func QuestionBytes(buf []byte) ([]byte, error) {
+func QuestionBytes(buf []byte, numQuestion int) ([]byte, error) {
 	if len(buf) < 13 {
 		return []byte{}, errors.New("buf less than 12")
 	}
 
 	start := 12
+	numNull := 0
 	end := 0
+	pointer := false
 
 	for i := start; i < len(buf); i++ {
 		if buf[i] == 0x0 {
-			end = i
-			break
+			numNull++
+			if numNull == numQuestion {
+				end = i
+				break
+			}
+
+			i += 4
 		}
+		// pointer
+		if buf[i] >= 0b11000000 {
+			numNull++
+			if numNull == numQuestion {
+				end = i
+				pointer = true
+				break
+			}
+
+			i += 5
+		}
+
 	}
 
 	if end == 0 {
 		return []byte{}, errors.New("invalid format")
 	}
 
-	end += 5
+	if pointer {
+		end += 6
+	} else {
+		end += 5
+	}
 
 	return buf[start:end], nil
 }
